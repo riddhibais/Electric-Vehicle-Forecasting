@@ -5,44 +5,41 @@ import pickle
 import gdown 
 import os 
 
-# ==============================================================================
-# ⚠️ CONFIGURATION: GOOGLE DRIVE DOWNLOAD
-# ==============================================================================
 
-# 1. Yahan model file ki Google Drive ID hai (Poori link nahi)
+
 DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc' 
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
-# --- 2. DOWNLOAD FUNCTION ---
+
 @st.cache_resource
 def download_file_from_drive():
     if not os.path.exists(LOCAL_FILE_PATH):
-        st.info("Model file Google Drive se download ho raha hai... (Sirf pehli baar)")
+        
         try:
-            # Gdown ka use karke file download karein
+         
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
         except Exception as e:
             st.error(f"Download Error. Kripya confirm karein ki Drive link 'Anyone with the link' par set hai: {e}")
             st.stop()
     
-    # 💡 Model ko load karein
     try:
         with open(LOCAL_FILE_PATH, 'rb') as f:
             model = pickle.load(f)
         st.sidebar.success("Model Loaded Successfully!")
         return model
     except Exception as e:
-        st.sidebar.error(f"Model Load Error. File corrupt ho sakti hai: {e}")
+        st.sidebar.error(f"Model Load Error: Check file access/corruption: {e}")
         st.stop()
         return None
 
 # --- EXECUTE DOWNLOAD & LOAD MODEL ---
 model = download_file_from_drive()
 
-# --- 3. CORE PREDICTION SETUP (REMAINDER OF YOUR APP) ---
+#  CORE PREDICTION SETUP 
 
 st.set_page_config(layout="wide")
-st.title("⚡ Smart EV Range Prediction Assistant (Permanent Host)")
+
+st.title("⚡ Smart EV Range Prediction Assistant")
 
 # --- MODEL METRICS DISPLAY ---
 st.sidebar.header("📊 Model Performance (RFR)")
@@ -170,7 +167,7 @@ with tab1:
             st.error("Model not loaded. Please ensure the model file is accessible.")
             
 # ====================================================================
-# TAB 2: SMART ASSISTANT (CHATBOT - Placeholder)
+# TAB 2: SMART ASSISTANT (CHATBOT)
 # ====================================================================
 
 with tab2:
