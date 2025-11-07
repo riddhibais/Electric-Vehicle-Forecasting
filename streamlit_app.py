@@ -4,7 +4,10 @@ import numpy as np
 import pickle 
 import gdown 
 import os 
-import re # <-- NEW: For text extraction
+import re 
+from math import radians, sin, cos, sqrt, atan2 # <-- NEW: For Haversine distance
+
+
 # 1. Google Drive Model ID
 DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc' 
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
@@ -99,7 +102,50 @@ def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
     return input_data
 
 # ====================================================================
-# NEW CHATBOT LOGIC FUNCTIONS
+# CHARGING STATION LOGIC (NEW SECTION)
+# ====================================================================
+
+# --- Dummy Charging Station Data (You can replace this with real data) ---
+CHARGING_STATIONS_DATA = {
+    'Station_Name': ['City Center Fast Charge', 'Highway Rest Stop', 'Mall Parking Station'],
+    'Latitude': [21.2500, 21.2700, 21.2300], # Example Latitudes (Near Raipur)
+    'Longitude': [81.6300, 81.6000, 81.6500] # Example Longitudes
+}
+STATIONS_DF = pd.DataFrame(CHARGING_STATIONS_DATA)
+EARTH_RADIUS_KM = 6371
+
+def haversine(lat1, lon1, lat2, lon2):
+    """Calculates the distance between two points on the earth in kilometers."""
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    
+    return EARTH_RADIUS_KM * c
+
+def calculate_nearest_station(user_lat, user_lon):
+    """Finds the closest station to the user's location."""
+    
+    if STATIONS_DF.empty:
+        return "No station data available."
+
+    distances = STATIONS_DF.apply(
+        lambda row: haversine(user_lat, user_lon, row['Latitude'], row['Longitude']),
+        axis=1
+    )
+    
+    closest_station_index = distances.idxmin()
+    closest_station = STATIONS_DF.loc[closest_station_index]
+    min_distance = distances.min()
+    
+    return (f"The nearest charging station is **{closest_station['Station_Name']}**.\n"
+            f"It is approximately **{min_distance:.2f} km** away from your location.")
+
+# ====================================================================
+# NEW CHATBOT LOGIC FUNCTIONS (Unchanged from last step)
 # ====================================================================
 
 def handle_doubt_clearing(user_prompt):
@@ -127,18 +173,14 @@ def handle_prediction_chat(user_prompt, model):
     if not any(keyword in prompt_lower for keyword in ["predict", "range", "consumption"]):
         return None # Not a prediction request
     
-    # --- 1. Extract Numerical Values (Speed and Battery % are mandatory for a good prediction) ---
-    
-    # Try to find common feature names near numbers
+    # --- 1. Extract Numerical Values ---
     speed_match = re.search(r'(\d+)\s*km/?h|at\s*(\d+)', prompt_lower)
     battery_match = re.search(r'(\d+)\s*%', prompt_lower)
     
-    # Extract values, setting defaults if not found (defaults are based on sliders)
     speed = float(speed_match.group(1) or speed_match.group(2)) if speed_match else 60.0
     current_soc = float(battery_match.group(1)) if battery_match else 75.0
     
-    # --- 2. Extract Categorical Values (Setting Normal/Urban/0 as default) ---
-    
+    # --- 2. Extract Categorical Values ---
     driving_mode = 2 # Default: Normal
     if "eco" in prompt_lower: driving_mode = 1
     elif "sport" in prompt_lower: driving_mode = 3
@@ -151,7 +193,6 @@ def handle_prediction_chat(user_prompt, model):
     slope = float(slope_match.group(1)) if slope_match else 0.0
 
     # --- 3. Run Prediction ---
-    
     try:
         input_data_dict = prepare_input(speed, 25.0, driving_mode, road_type, 2, slope, current_soc)
         consumption = predict_energy_consumption_local(input_data_dict, model)
@@ -163,15 +204,11 @@ def handle_prediction_chat(user_prompt, model):
         if consumption <= 0.0001:
             return "**Error**: Consumption too low. Please adjust inputs."
             
-        
-        # --- 4. Format Output ---
-        
         return (f"Based on your query, the parameters used are: **Speed: {speed} km/h, Battery: {current_soc}%, Slope: {slope}%, Mode: {driving_mode}**.\n\n"
                 f"**Predicted Consumption**: {consumption:.3f} kWh/km\n"
                 f"**Predicted Range**: {predicted_range:.0f} km")
 
     except Exception:
-        # If prediction fails due to missing numbers
         return "Sorry, I could not find enough parameters (Speed and Battery %) in your query to run the prediction model. Please provide them explicitly."
 
 
@@ -182,6 +219,7 @@ def handle_prediction_chat(user_prompt, model):
 tab1, tab2 = st.tabs(["🚀 Live Prediction Form", "💬 Smart Assistant (Chatbot)"])
 
 # --- TAB 1: LIVE PREDICTION FORM (Unchanged) ---
+# ... (Tab 1 content remains the same) ...
 
 with tab1:
     st.header("Real-Time Energy Consumption Calculator")
@@ -232,14 +270,14 @@ with tab1:
         else:
             st.error("Model not loaded. Please ensure the model file is accessible.")
             
-# --- TAB 2: SMART ASSISTANT (UPDATED LOGIC) ---
+# --- TAB 2: SMART ASSISTANT 
 
 with tab2:
     st.header("Smart Assistant: Conversational Range Advice")
-    st.info("💡 NOTE: I can answer questions about **model features (e.g., slope)** and provide **range predictions from text** (e.g., 'What is the range at 80 km/h with 70% battery?').")
+    st.info("💡 NOTE: Ask about model features, range prediction, or nearest charging stations (using default coordinates: 21.25°N, 81.63°E).")
     
     if 'messages' not in st.session_state:
-        st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, like "What is road slope?" or "Predict range at 70 km/h with 75% battery." **(Nearest station logic is coming soon!)**'}]
+        st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, or try **"Find nearest charging station"** to use my default location (Raipur). 📍'}]
 
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
@@ -248,17 +286,31 @@ with tab2:
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.chat_message("user").write(prompt)
         
+        prompt_lower = prompt.lower()
+        response_text = None
+        
         with st.spinner('Thinking...'):
-            # 1. Try to handle Prediction first
-            response_text = handle_prediction_chat(prompt, model)
             
-            # 2. If not a prediction, try to clear a doubt
+            # --- 1. Nearest Station Check ---
+            if "nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower):
+                # Using default coordinates for now (e.g., Raipur: 21.25, 81.63)
+                user_lat = 21.2500 
+                user_lon = 81.6300 
+                
+                response_text = calculate_nearest_station(user_lat, user_lon)
+                response_text = f"Using default location (Lat: {user_lat}, Lon: {user_lon}):\n\n" + response_text
+            
+            # --- 2. Try Prediction ---
+            if response_text is None:
+                response_text = handle_prediction_chat(prompt, model)
+            
+            # --- 3. Try Doubt Clearing ---
             if response_text is None:
                 response_text = handle_doubt_clearing(prompt)
             
-            # 3. If still no response, use a generic reply
+            # --- 4. Generic Reply ---
             if response_text is None:
-                response_text = "I'm sorry, I can only answer questions related to the **EV model features (like slope, SOC)** or **predict range** if you provide speed and battery percentage. For nearest charging stations, that feature is under development!"
+                response_text = "I'm sorry, I can only answer questions related to the **EV model features**, **predict range**, or **find the nearest charging station** (using a default location). Please rephrase your question."
 
             st.session_state.messages.append({"role": "assistant", "content": response_text})
             st.chat_message("assistant").write(response_text)
