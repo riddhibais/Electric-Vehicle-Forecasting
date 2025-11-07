@@ -4,22 +4,19 @@ import numpy as np
 import pickle 
 import gdown 
 import os 
-
-
-
+import re # <-- NEW: For text extraction
+# 1. Google Drive Model ID
 DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc' 
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
-
+# --- DOWNLOAD & LOAD MODEL FUNCTION ---
 @st.cache_resource
 def download_file_from_drive():
     if not os.path.exists(LOCAL_FILE_PATH):
-        
         try:
-         
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
         except Exception as e:
-            st.error(f"Download Error. Kripya confirm karein ki Drive link 'Anyone with the link' par set hai: {e}")
+            st.error(f"Download Error. Check file access/Drive sharing settings: {e}")
             st.stop()
     
     try:
@@ -35,10 +32,9 @@ def download_file_from_drive():
 # --- EXECUTE DOWNLOAD & LOAD MODEL ---
 model = download_file_from_drive()
 
-#  CORE PREDICTION SETUP 
+# --- 3. CORE PREDICTION SETUP ---
 
 st.set_page_config(layout="wide")
-
 st.title("⚡ Smart EV Range Prediction Assistant")
 
 # --- MODEL METRICS DISPLAY ---
@@ -102,17 +98,94 @@ def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
     }
     return input_data
 
-# --- MAIN INTERFACE (TABS) ---
-tab1, tab2 = st.tabs(["🚀 Live Prediction Form", "💬 Smart Assistant (Chatbot)"])
+# ====================================================================
+# NEW CHATBOT LOGIC FUNCTIONS
+# ====================================================================
+
+def handle_doubt_clearing(user_prompt):
+    """Provides detailed explanations for model features."""
+    prompt_lower = user_prompt.lower()
+    
+    if any(keyword in prompt_lower for keyword in ["slope", "road slope", "incline"]):
+        return ("**Road Slope (%)**: This represents the steepness of the road. A positive slope (e.g., +5%) means driving uphill, which dramatically increases energy usage. A negative slope (e.g., -5%) means driving downhill, where regenerative braking can recover energy. In our model, **0% is a flat road**.")
+    
+    elif any(keyword in prompt_lower for keyword in ["soc", "battery state", "battery percentage"]):
+        return ("**Battery State of Charge (SOC) %**: This is simply the remaining percentage of energy in your battery. This value helps calculate your remaining driving range: **Remaining Range = (Total Battery Energy * SOC) / Consumption Rate**.")
+
+    elif any(keyword in prompt_lower for keyword in ["road type", "highway", "urban", "rural"]):
+        return ("**Road Type**: This categorizes the driving environment, affecting speed limits and traffic. **1: Highway**, **2: Urban** (city driving), **3: Rural** (country roads). Each type has different typical consumption profiles.")
+
+    elif any(keyword in prompt_lower for keyword in ["consumption", "kwh/km"]):
+        return ("**Energy Consumption (kWh/km)**: This is the core output of the model—how many Kilowatt-hours (kWh) of energy your car uses to travel one kilometer. Lower is better. This rate depends heavily on speed, slope, and driving mode.")
+    
+    return None
+
+def handle_prediction_chat(user_prompt, model):
+    """Extracts parameters from text and returns a prediction."""
+    prompt_lower = user_prompt.lower()
+    
+    if not any(keyword in prompt_lower for keyword in ["predict", "range", "consumption"]):
+        return None # Not a prediction request
+    
+    # --- 1. Extract Numerical Values (Speed and Battery % are mandatory for a good prediction) ---
+    
+    # Try to find common feature names near numbers
+    speed_match = re.search(r'(\d+)\s*km/?h|at\s*(\d+)', prompt_lower)
+    battery_match = re.search(r'(\d+)\s*%', prompt_lower)
+    
+    # Extract values, setting defaults if not found (defaults are based on sliders)
+    speed = float(speed_match.group(1) or speed_match.group(2)) if speed_match else 60.0
+    current_soc = float(battery_match.group(1)) if battery_match else 75.0
+    
+    # --- 2. Extract Categorical Values (Setting Normal/Urban/0 as default) ---
+    
+    driving_mode = 2 # Default: Normal
+    if "eco" in prompt_lower: driving_mode = 1
+    elif "sport" in prompt_lower: driving_mode = 3
+
+    road_type = 2 # Default: Urban
+    if "highway" in prompt_lower: road_type = 1
+    elif "rural" in prompt_lower: road_type = 3
+    
+    slope_match = re.search(r'slope\s*(\-?\+?\d+\.?\d*)', prompt_lower)
+    slope = float(slope_match.group(1)) if slope_match else 0.0
+
+    # --- 3. Run Prediction ---
+    
+    try:
+        input_data_dict = prepare_input(speed, 25.0, driving_mode, road_type, 2, slope, current_soc)
+        consumption = predict_energy_consumption_local(input_data_dict, model)
+        
+        TOTAL_USABLE_BATTERY_KWH = 60.0
+        remaining_energy = TOTAL_USABLE_BATTERY_KWH * (current_soc / 100)
+        predicted_range = remaining_energy / consumption if consumption > 0 else 0.0
+        
+        if consumption <= 0.0001:
+            return "**Error**: Consumption too low. Please adjust inputs."
+            
+        
+        # --- 4. Format Output ---
+        
+        return (f"Based on your query, the parameters used are: **Speed: {speed} km/h, Battery: {current_soc}%, Slope: {slope}%, Mode: {driving_mode}**.\n\n"
+                f"**Predicted Consumption**: {consumption:.3f} kWh/km\n"
+                f"**Predicted Range**: {predicted_range:.0f} km")
+
+    except Exception:
+        # If prediction fails due to missing numbers
+        return "Sorry, I could not find enough parameters (Speed and Battery %) in your query to run the prediction model. Please provide them explicitly."
+
 
 # ====================================================================
-# TAB 1: LIVE PREDICTION FORM
+# MAIN INTERFACE (TABS)
 # ====================================================================
+
+tab1, tab2 = st.tabs(["🚀 Live Prediction Form", "💬 Smart Assistant (Chatbot)"])
+
+# --- TAB 1: LIVE PREDICTION FORM (Unchanged) ---
 
 with tab1:
     st.header("Real-Time Energy Consumption Calculator")
     
-    # ... (User Input Fields) ...
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -135,27 +208,20 @@ with tab1:
         traffic_condition_name = st.selectbox("Traffic Condition", list(traffic_options.keys()))
         traffic_condition = traffic_options[traffic_condition_name]
         
-    # Prediction Button
     if st.button("Predict Range & Consumption", key='predict_btn'):
         
         if model is not None:
             with st.spinner('Calculating prediction from ML Model...'):
-                
                 input_data_dict = prepare_input(speed, temp, driving_mode, road_type, traffic_condition, slope, current_soc)
-                
-                # 2. Call the LOCAL prediction function directly
                 consumption = predict_energy_consumption_local(input_data_dict, model)
                 
-                # --- Range Calculation ---
                 TOTAL_USABLE_BATTERY_KWH = 60.0
                 remaining_energy = TOTAL_USABLE_BATTERY_KWH * (current_soc / 100)
-                
                 predicted_range = remaining_energy / consumption if consumption > 0 else 0.0
 
                 st.success("✅ Prediction Successful!")
                 
                 colA, colB, colC = st.columns(3)
-                
                 colA.metric("Predicted Consumption", f"{consumption:.4f} kWh/km")
                 colB.metric("Remaining Battery Energy", f"{remaining_energy:.2f} kWh")
                 colC.metric("Predicted Range", f"{predicted_range:.0f} km")
@@ -166,16 +232,14 @@ with tab1:
         else:
             st.error("Model not loaded. Please ensure the model file is accessible.")
             
-# ====================================================================
-# TAB 2: SMART ASSISTANT (CHATBOT)
-# ====================================================================
+# --- TAB 2: SMART ASSISTANT (UPDATED LOGIC) ---
 
 with tab2:
     st.header("Smart Assistant: Conversational Range Advice")
-    st.info("💡 NOTE: This Chatbot tab is the future home for Smart Charging Recommendation logic.")
+    st.info("💡 NOTE: I can answer questions about **model features (e.g., slope)** and provide **range predictions from text** (e.g., 'What is the range at 80 km/h with 70% battery?').")
     
     if 'messages' not in st.session_state:
-        st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! I am your Smart EV Assistant. Ask me your range-related questions.'}]
+        st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, like "What is road slope?" or "Predict range at 70 km/h with 75% battery." **(Nearest station logic is coming soon!)**'}]
 
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
@@ -184,7 +248,17 @@ with tab2:
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.chat_message("user").write(prompt)
         
-        response_text = f"Thank you for your question: '{prompt}'. Once the full Charging Recommendation logic is implemented, I will give you smart advice on range and nearby stations."
-        
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        st.chat_message("assistant").write(response_text)
+        with st.spinner('Thinking...'):
+            # 1. Try to handle Prediction first
+            response_text = handle_prediction_chat(prompt, model)
+            
+            # 2. If not a prediction, try to clear a doubt
+            if response_text is None:
+                response_text = handle_doubt_clearing(prompt)
+            
+            # 3. If still no response, use a generic reply
+            if response_text is None:
+                response_text = "I'm sorry, I can only answer questions related to the **EV model features (like slope, SOC)** or **predict range** if you provide speed and battery percentage. For nearest charging stations, that feature is under development!"
+
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            st.chat_message("assistant").write(response_text)
