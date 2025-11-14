@@ -5,3 +5,6 @@ scikit-learn
 gdown
 
 requests
+
+geopy
+pip install geopy
