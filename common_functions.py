@@ -38,7 +38,9 @@ FEATURE_NAMES = [
     'Weather_Condition_2', 'Weather_Condition_3', 'Weather_Condition_4' 
 ]
 
-# --- DOWNLOAD & LOAD MODEL FUNCTION ---
+
+
+# ... (inside download_file_from_drive function)
 @st.cache_resource
 def download_file_from_drive():
     if not os.path.exists(LOCAL_FILE_PATH):
@@ -46,7 +48,7 @@ def download_file_from_drive():
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
         except Exception as e:
             st.error(f"Download Error. Check file access/Drive sharing settings: {e}")
-            st.stop()
+            # st.stop() # <-- IS LINE KO HATA DIJIYE
     
     try:
         with open(LOCAL_FILE_PATH, 'rb') as f:
@@ -55,9 +57,8 @@ def download_file_from_drive():
         return model
     except Exception as e:
         st.sidebar.error(f"Model Load Error: Check file access/corruption: {e}")
-        st.stop()
+        # st.stop() # <-- IS LINE KO BHI HATA DIJIYE
         return None
-
 # INPUT MAPPING: Realistic placeholders
 def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
     input_data = {
