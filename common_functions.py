@@ -8,10 +8,20 @@ import gdown
 import os 
 import re 
 from math import radians, sin, cos, sqrt, atan2
+import googlemaps # New: Google Maps Library
 
 # ==============================================================================
 # ⚠️ CONFIGURATION: CONSTANTS & MODEL SETUP
 # ==============================================================================
+
+# --- API KEY & MAPS CLIENT ---
+# Load API Key from .streamlit/secrets.toml
+try:
+    API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
+    gmaps_client = googlemaps.Client(key=API_KEY)
+except (KeyError, AttributeError):
+    st.error("Google Maps API Key not found in .streamlit/secrets.toml. Maps feature will be disabled.")
+    gmaps_client = None
 
 # Model ID and Path
 DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc' 
@@ -19,7 +29,6 @@ LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
 # Green Skills and Vehicle Constants
 TOTAL_USABLE_BATTERY_KWH = 60.0
-# Avg CO2 emission of a petrol/diesel car per km (in kg)
 EMISSION_FACTOR_KG_PER_KM = 0.18 
 
 # IMPORTANT: Feature Names for Model Input
@@ -107,15 +116,11 @@ def calculate_range_metrics(consumption, current_soc):
     return predicted_range, co2_saved_kg
 
 # ====================================================================
-# CHARGING STATION LOGIC 
+# CHARGING STATION LOGIC (USING Google Maps) 
 # ====================================================================
 
-CHARGING_STATIONS_DATA = {
-    'Station_Name': ['City Center Fast Charge', 'Highway Rest Stop', 'Mall Parking Station'],
-    'Latitude': [21.2500, 21.2700, 21.2300], 
-    'Longitude': [81.6300, 81.6000, 81.6500] 
-}
-STATIONS_DF = pd.DataFrame(CHARGING_STATIONS_DATA)
+# We will search for stations within a 5km radius of the user's default location.
+DEFAULT_LOCATION = [21.2500, 81.6300] # Default: Raipur, CG (just a placeholder)
 EARTH_RADIUS_KM = 6371
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -130,20 +135,56 @@ def haversine(lat1, lon1, lat2, lon2):
     
     return EARTH_RADIUS_KM * c
 
-def calculate_nearest_station(user_lat, user_lon):
-    """Finds the closest station to the user's location."""
-    
-    if STATIONS_DF.empty:
-        return "No station data available."
 
-    distances = STATIONS_DF.apply(
-        lambda row: haversine(user_lat, user_lon, row['Latitude'], row['Longitude']),
+def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
+    """
+    Finds charging stations using Google Places API and returns a DataFrame
+    for display on the Streamlit map.
+    """
+    if gmaps_client is None:
+        return pd.DataFrame()
+    
+    try:
+        # Google Places API Call: Search for charging stations within a 5km radius
+        places_result = gmaps_client.places_nearby(
+            location=(user_lat, user_lon),
+            radius=radius_km * 1000, # Radius in meters
+            type='electric_vehicle_charging_station'
+        )
+        
+        stations = []
+        for place in places_result.get('results', []):
+            stations.append({
+                'Station_Name': place.get('name', 'Unnamed Station'),
+                'lat': place['geometry']['location']['lat'],
+                'lon': place['geometry']['location']['lng']
+            })
+        
+        if not stations:
+            st.warning(f"No EV charging stations found within {radius_km} km of the location.")
+            return pd.DataFrame()
+
+        return pd.DataFrame(stations)
+        
+    except Exception as e:
+        st.error(f"Error fetching stations from Google Maps API: {e}")
+        return pd.DataFrame()
+
+def calculate_nearest_station_details(stations_df, user_lat, user_lon):
+    """
+    Calculates distance to the nearest station from the fetched DataFrame.
+    """
+    if stations_df.empty:
+        return "No stations data to calculate distance."
+
+    distances = stations_df.apply(
+        lambda row: haversine(user_lat, user_lon, row['lat'], row['lon']),
         axis=1
     )
     
     closest_station_index = distances.idxmin()
-    closest_station = STATIONS_DF.loc[closest_station_index]
+    closest_station = stations_df.loc[closest_station_index]
     min_distance = distances.min()
     
-    return (f"The nearest charging station is **{closest_station['Station_Name']}**.\n"
-            f"It is approximately **{min_distance:.2f} km** away from your location.")
+    return (f"The nearest charging station found is **{closest_station['Station_Name']}**.\n"
+            f"It is approximately **{min_distance:.2f} km** away.")
