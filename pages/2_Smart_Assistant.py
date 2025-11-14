@@ -1,5 +1,3 @@
-# pages/2_Smart_assistant.py
-
 import streamlit as st
 import common_functions as cf 
 import re 
@@ -16,131 +14,64 @@ st.markdown("---")
 # ====================================================================
 
 def handle_doubt_clearing(user_prompt):
-    """Provides detailed explanations for model features."""
+    """Provides detailed explanations for model features like Slope."""
     prompt_lower = user_prompt.lower()
     
-    if any(keyword in prompt_lower for keyword in ["slope", "road slope", "incline"]):
-        return ("**Road Slope (%)**: This represents the steepness of the road. A positive slope (e.g., +5%) means driving uphill, which dramatically increases energy usage. A negative slope (e.g., -5%) means driving downhill, where regenerative braking can recover energy. In our model, **0% is a flat road**.")
+    if any(keyword in prompt_lower for keyword in ["slope", "road slope", "incline", "dhalan"]):
+        return ("**🛣️ Road Slope (%)**: This represents the steepness of the road.\n"
+                "* **Positive Slope (+5%)** means **driving uphill**, which dramatically increases energy usage.\n"
+                "* **Negative Slope (-5%)** means **driving downhill**, allowing for energy **recovery** via regenerative braking.\n"
+                "* **0%** means a **flat road**.")
     
-    elif any(keyword in prompt_lower for keyword in ["soc", "battery state", "battery percentage"]):
-        return ("**Battery State of Charge (SOC) %**: This is simply the remaining percentage of energy in your battery. This value helps calculate your remaining driving range: **Remaining Range = (Total Battery Energy * SOC) / Consumption Rate**.")
+    elif any(keyword in prompt_lower for keyword in ["soc", "battery state", "battery percentage", "range"]):
+        return ("**🔋 Battery State of Charge (SOC) %**: This is the remaining percentage of energy in your battery, used to calculate your remaining driving range.")
 
-    elif any(keyword in prompt_lower for keyword in ["road type", "highway", "urban", "rural"]):
-        return ("**Road Type**: This categorizes the driving environment, affecting speed limits and traffic. **1: Highway**, **2: Urban** (city driving), **3: Rural** (country roads). Each type has different typical consumption profiles.")
-
-    elif any(keyword in prompt_lower for keyword in ["consumption", "kwh/km"]):
-        return ("**Energy Consumption (kWh/km)**: This is the core output of the model—how many Kilowatt-hours (kWh) of energy your car uses to travel one kilometer. Lower is better. This rate depends heavily on speed, slope, and driving mode.")
+    elif any(keyword in prompt_lower for keyword in ["consumption", "kwh/km", "average"]):
+        return ("**⚡ Energy Consumption (kWh/km)**: This is the energy (kWh) your car uses to travel one kilometer. Lower consumption is better.")
     
     return None
 
+
 def handle_prediction_chat(user_prompt, model):
-    """Extracts parameters from text and returns a prediction."""
+    """Extracts parameters from text (including slope) and returns a prediction."""
     prompt_lower = user_prompt.lower()
     
+    # Check if this is a prediction request
     if not any(keyword in prompt_lower for keyword in ["predict", "range", "consumption"]):
         return None
     
     # --- 1. Extract Numerical Values ---
     speed_match = re.search(r'(\d+)\s*km/?h|at\s*(\d+)', prompt_lower)
     battery_match = re.search(r'(\d+)\s*%', prompt_lower)
-    
-    speed = float(speed_match.group(1) or speed_match.group(2)) if speed_match else 60.0
+    slope_match = re.search(r'slope\s*(\-?\+?\d+\.?\d*)', prompt_lower)
+
+    # Assign extracted or default values
+    current_speed = float(speed_match.group(1) or speed_match.group(2)) if speed_match else 60.0
     current_soc = float(battery_match.group(1)) if battery_match else 75.0
-    
-    # --- 2. Extract Categorical Values ---
-    driving_mode = 2 
+    current_slope = float(slope_match.group(1)) if slope_match else 0.0
+
+    # --- 2. Extract Categorical Values (Defaults) ---
+    driving_mode = 2 # Default: Normal
     if "eco" in prompt_lower: driving_mode = 1
     elif "sport" in prompt_lower: driving_mode = 3
 
-    road_type = 2 
-    if "highway" in prompt_lower: road_type = 1
-    elif "rural" in prompt_lower: road_type = 3
+    road_type = 2 # Default: Urban
+    traffic_condition = 2 # Default: Moderate
+    temp = 25.0 # Default temp
     
-    slope_match = re.search(r'slope\s*(\-?\+?\d+\.?\d*)', prompt_lower)
-    slope = float(slope_match.group(1)) if slope_match else 0.0
-
     # --- 3. Run Prediction ---
     try:
-        input_data_dict = cf.prepare_input(speed, 25.0, driving_mode, road_type, 2, slope, current_soc)
+        input_data_dict = cf.prepare_input(
+            current_speed, 
+            temp, 
+            driving_mode, 
+            road_type, 
+            traffic_condition, 
+            current_slope, # <-- Updated Slope value
+            current_soc
+        )
         consumption = cf.predict_energy_consumption_local(input_data_dict, model)
         
         predicted_range, co2_saved_kg = cf.calculate_range_metrics(consumption, current_soc)
         
-        if consumption <= 0.0001:
-            return "**Error**: Consumption too low. Please adjust inputs."
-            
-        return (f"Based on your query, the parameters used are: **Speed: {speed} km/h, Battery: {current_soc}%, Slope: {slope}%, Mode: {driving_mode}**.\n\n"
-                f"**Predicted Consumption**: {consumption:.3f} kWh/km\n"
-                f"**Predicted Range**: {predicted_range:.0f} km\n"
-                f"**Green Skill**: You are saving **{co2_saved_kg:.1f} kg CO2** on this range.")
-
-    except Exception:
-        return "Sorry, I could not find enough parameters (Speed and Battery %) in your query to run the prediction model. Please provide them explicitly."
-
-
-# ====================================================================
-# MAIN CHATBOT INTERFACE
-# ====================================================================
-
-st.info("💡 NOTE: Ask about model features, range prediction, or try **'Find nearest charging station'** for map visualization (using free OpenStreetMap data). Default location is used for map search.")
-
-if 'messages' not in st.session_state:
-    st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, or try **"Find nearest charging station"** to use my default location. 📍'}]
-
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
-
-if prompt := st.chat_input("Type your question here..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.chat_message("user").write(prompt)
-    
-    prompt_lower = prompt.lower()
-    response_text = None
-    
-    with st.spinner('Thinking...'):
-        
-        # 1. Nearest Station Check (Map Integration)
-        if "nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower or "map" in prompt_lower):
-            
-            user_lat, user_lon = cf.DEFAULT_LOCATION 
-            
-            # --- Map and Distance Calculation (Uses FREE Overpass API) ---
-            stations_df = cf.find_nearest_charging_stations(user_lat, user_lon)
-            
-            if not stations_df.empty:
-                st.subheader("📍 Nearest Charging Stations (5km Radius - OpenStreetMap)")
-                
-                # Rename columns for Streamlit map compatibility
-                stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
-                
-                # Add the user's default location to the map for context
-                user_location_df = pd.DataFrame([{'latitude': user_lat, 'longitude': user_lon, 'Station_Name': 'Your Location (Default)'}])
-                map_data = pd.concat([user_location_df, stations_df], ignore_index=True)
-                
-                # Streamlit Map is used here
-                st.map(map_data, zoom=12, use_container_width=True)
-                
-                # Get distance details
-                response_text = cf.calculate_nearest_station_details(stations_df, user_lat, user_lon)
-                
-                st.info(f"Map is centered at default location (Lat: {user_lat}, Lon: {user_lon}).\n\n{response_text}")
-                response_text = "Here are the free stations I found on the map for the default location!"
-            
-            else:
-                response_text = "I couldn't find any charging stations near the default location (within 5 km) on OpenStreetMap. Maybe the data is missing for this area."
-
-
-        # 2. Try Prediction 
-        if response_text is None:
-            response_text = handle_prediction_chat(prompt, model)
-        
-        # 3. Try Doubt Clearing 
-        if response_text is None:
-            response_text = handle_doubt_clearing(prompt)
-        
-        # 4. Generic Reply 
-        if response_text is None:
-            response_text = "I'm sorry, I can only answer questions related to the **EV model features**, **predict range**, or **find the nearest charging station**."
-
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        st.chat_message("assistant").write(response_text)
+        if consumption <= 0.0001 and model is not None:
