@@ -23,4 +23,5 @@ st.info("""
     * **Smart Assistant:** Chat with the AI for doubts and nearest charging station information.
 """)
 
-st.image("https://images.unsplash.com/photo-1627964177303-a3d8b5b7e841?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", caption="Driving the future with Electric Vehicles.")
+
+"st.image(""https://images.unsplash.com/photo-1549419137-b6f38059c381?q=80&w=1770&auto=format&fit=crop"", caption=""Green Energy: Driving the future with Electric Vehicles."")"
