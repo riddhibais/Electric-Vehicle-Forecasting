@@ -1,4 +1,4 @@
-# pages/2_Smart_Assistant.py
+# pages/2_Smart_assistant.py
 
 import streamlit as st
 import common_functions as cf 
@@ -12,7 +12,7 @@ st.title("💬 Smart Assistant: Green Driving & Charging")
 st.markdown("---") 
 
 # ====================================================================
-# CHATBOT LOGIC FUNCTIONS (Using common_functions)
+# CHATBOT LOGIC FUNCTIONS 
 # ====================================================================
 
 def handle_doubt_clearing(user_prompt):
@@ -82,7 +82,7 @@ def handle_prediction_chat(user_prompt, model):
 # MAIN CHATBOT INTERFACE
 # ====================================================================
 
-st.info("💡 NOTE: Ask about model features, range prediction, or try **'Find nearest charging station'** for map visualization. Default location is used for map search.")
+st.info("💡 NOTE: Ask about model features, range prediction, or try **'Find nearest charging station'** for map visualization (using free OpenStreetMap data). Default location is used for map search.")
 
 if 'messages' not in st.session_state:
     st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, or try **"Find nearest charging station"** to use my default location. 📍'}]
@@ -104,11 +104,11 @@ if prompt := st.chat_input("Type your question here..."):
             
             user_lat, user_lon = cf.DEFAULT_LOCATION 
             
-            # --- Map and Distance Calculation ---
+            # --- Map and Distance Calculation (Uses FREE Overpass API) ---
             stations_df = cf.find_nearest_charging_stations(user_lat, user_lon)
             
             if not stations_df.empty:
-                st.subheader("📍 Nearest Charging Stations (5km Radius)")
+                st.subheader("📍 Nearest Charging Stations (5km Radius - OpenStreetMap)")
                 
                 # Rename columns for Streamlit map compatibility
                 stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
@@ -124,12 +124,10 @@ if prompt := st.chat_input("Type your question here..."):
                 response_text = cf.calculate_nearest_station_details(stations_df, user_lat, user_lon)
                 
                 st.info(f"Map is centered at default location (Lat: {user_lat}, Lon: {user_lon}).\n\n{response_text}")
-                response_text = "Here are the stations I found on the map for the default location!"
+                response_text = "Here are the free stations I found on the map for the default location!"
             
-            elif cf.gmaps_client is not None:
-                response_text = "I couldn't find any charging stations near the default location (within 5 km). Try a different area."
             else:
-                response_text = "I cannot search for charging stations because the **Google Maps API Key is missing or invalid** in `.streamlit/secrets.toml`."
+                response_text = "I couldn't find any charging stations near the default location (within 5 km) on OpenStreetMap. Maybe the data is missing for this area."
 
 
         # 2. Try Prediction 
