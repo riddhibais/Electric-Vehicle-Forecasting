@@ -20,7 +20,7 @@ try:
     API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
     gmaps_client = googlemaps.Client(key=API_KEY)
 except (KeyError, AttributeError):
-    st.error("Google Maps API Key not found in .streamlit/secrets.toml. Maps feature will be disabled.")
+  #  st.error("Google Maps API Key not found in .streamlit/secrets.toml. Maps feature will be disabled.")
     gmaps_client = None
 
 # Model ID and Path
