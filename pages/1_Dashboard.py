@@ -16,7 +16,7 @@ st.sidebar.subheader("Driving Mode Mapping")
 st.sidebar.markdown("1: Eco | 2: Normal | 3: Sport")
 st.markdown("---") 
 
-st.header("Real-Time Energy Consumption Calculator")
+st.header("EV Range Prediction & Green Driving Analysis")
 
 col1, col2, col3 = st.columns(3)
 
