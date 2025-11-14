@@ -2,6 +2,11 @@
 
 import streamlit as st
 import pandas as pd
+# common_functions.py
+
+# ... (Existing imports)
+from geopy.geocoders import Nominatim
+
 import numpy as np
 import pickle 
 import gdown 
@@ -137,6 +142,31 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     
     return EARTH_RADIUS_KM * c
+# common_functions.py
+
+# ... (DEFAULT_LOCATION ke neeche)
+
+def get_coordinates_from_query(query):
+    """Converts a location query (e.g., 'Mumbai') into (lat, lon) using Nominatim."""
+    geolocator = Nominatim(user_agent="EV_App_Assistant")
+    try:
+        location = geolocator.geocode(query, timeout=5)
+        if location:
+            return location.latitude, location.longitude, location.address
+        return None, None, None
+    except Exception:
+        return None, None, None
+
+def generate_gmaps_url(query, is_search=False):
+    """Generates a Google Maps URL for the given query (address or search)."""
+    base_url = "https://www.google.com/maps/"
+    if is_search:
+        # For searching 'Charging Stations near Mumbai'
+        return f"{base_url}search/{query.replace(' ', '+')}"
+    else:
+        # For an address/location
+        return f"{base_url}place/{query.replace(' ', '+')}"
+
 
 
 def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
