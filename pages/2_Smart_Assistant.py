@@ -121,33 +121,69 @@ if prompt := st.chat_input("Type your question here..."):
         # 1. Doubt Clearing Check (PRIORITY 1)
         response_text = handle_doubt_clearing(prompt)
 
-        # 2. Nearest Station Check (Map Integration)
+       # 2. Nearest Station Check (Map Integration)
         if response_text is None and ("nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower or "map" in prompt_lower)):
             
-            # This uses the coordinates defined in common_functions (currently Bengaluru) as the search center.
-            user_lat, user_lon = cf.DEFAULT_LOCATION
+            # --- Attempt to extract a city/location name from the prompt ---
+            search_query_match = re.search(r'near\s+(.+)', prompt_lower)
             
-            stations_df = cf.find_nearest_charging_stations(user_lat, user_lon)
-            
-            if not stations_df.empty:
-                st.subheader("📍 Nearest Charging Stations (5km Radius - OpenStreetMap)")
+            if search_query_match:
+                # User provided a specific location (e.g., "near Mumbai")
+                location_name = search_query_match.group(1).strip()
+                st.info(f"Searching for stations near: **{location_name.title()}**")
                 
-                # Prepare data for map
-                stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
+                # Use Geocoding to get coordinates
+                user_lat, user_lon, full_address = cf.get_coordinates_from_query(location_name)
                 
-                # st.map will attempt to center on the user's browser location if permission is granted, 
-                # otherwise it centers on the station data.
-                st.map(stations_df, zoom=12, use_container_width=True)
-                
-                # Get distance details
-                nearest_details = cf.calculate_nearest_station_details(stations_df, user_lat, user_lon)
-                
-                st.info(f"The map attempts to use your current location, but the search was conducted around the default area (Lat: {user_lat:.2f}, Lon: {user_lon:.2f}).\n\n{nearest_details}")
-                response_text = "Here are the free stations I found on the map!"
-            
+                if user_lat is None:
+                    response_text = f"❌ Sorry, I couldn't find the coordinates for **{location_name.title()}**. Please try a different name or a major city."
+                    # Still provide Google Maps link as a fallback
+                    gmaps_url = cf.generate_gmaps_url(f"EV Charging Stations near {location_name.title()}", is_search=True)
+                    response_text += f"\n\n**Tip:** Aap direct [Google Maps]({gmaps_url}) par search kar sakte hain."
+                else:
+                    search_center_lat, search_center_lon = user_lat, user_lon
             else:
-                response_text = f"I couldn't find any charging stations near the search area (within 5 km of the default location). The data might be missing for this area."
+                # User did NOT provide a specific location (Use default/fallback)
+                location_name = "Default Location (Bengaluru)"
+                search_center_lat, search_center_lon = cf.DEFAULT_LOCATION
+                st.info(f"Searching for stations near the **{location_name}** fallback coordinates.")
 
+
+            # --- Run Charging Station Search ---
+            if response_text is None:
+                # Assuming radius is 15km in common_functions.py
+                stations_df = cf.find_nearest_charging_stations(search_center_lat, search_center_lon)
+                
+                if not stations_df.empty:
+                    st.subheader(f"📍 Charging Stations Found (15km Radius)")
+                    
+                    stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
+                    st.map(stations_df, zoom=12, use_container_width=True)
+                    
+                    # Get distance details
+                    nearest_details = cf.calculate_nearest_station_details(stations_df, search_center_lat, search_center_lon)
+                    
+                    # Generate External Google Maps Link
+                    gmaps_search_query = f"EV Charging Stations near {location_name.title()}"
+                    gmaps_url = cf.generate_gmaps_url(gmaps_search_query, is_search=True)
+                    
+                    response_text = (
+                        f"Here are the stations I found based on the 15 km search radius around **{location_name.title()}**.\n\n"
+                        f"{nearest_details}\n\n"
+                        f"**🗺️ External Map Link:**\n"
+                        f"Agar aap **Google Maps** mein aur options dekhna chahte hain, toh yahan click karein: "
+                        f"[Open in Google Maps]({gmaps_url})"
+                    )
+                
+                else:
+                    # No stations found in the 15km radius
+                    response_text = f"I couldn't find any charging stations near **{location_name.title()}** (within 15 km). The data might be missing for this area."
+                    # Still provide the Google Maps link for external search
+                    gmaps_search_query = f"EV Charging Stations near {location_name.title()}"
+                    gmaps_url = cf.generate_gmaps_url(gmaps_search_query, is_search=True)
+                    response_text += f" You can try searching directly on [Google Maps]({gmaps_url})."
+            
+            
 
         # 3. Try Prediction 
         if response_text is None:
