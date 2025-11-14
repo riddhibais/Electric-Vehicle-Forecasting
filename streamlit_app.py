@@ -24,4 +24,4 @@ st.info("""
 """)
 
 
-"st.image(""https://images.unsplash.com/photo-1549419137-b6f38059c381?q=80&w=1770&auto=format&fit=crop"", caption=""Green Energy: Driving the future with Electric Vehicles."")"
+
