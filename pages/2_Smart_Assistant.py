@@ -4,6 +4,7 @@ import re
 import pandas as pd 
 
 # --- Load Model and Setup Sidebar ---
+# The model loading logic is now resilient due to fixes in common_functions.py
 model = cf.download_file_from_drive()
 
 st.title("💬 Smart Assistant: Green Driving & Charging")
@@ -14,23 +15,23 @@ st.markdown("---")
 # ====================================================================
 
 def handle_doubt_clearing(user_prompt):
-    """Provides detailed explanations for model features."""
+    """Provides detailed explanations for model features when the user asks 'What is X?'"""
     prompt_lower = user_prompt.lower()
     
     if any(keyword in prompt_lower for keyword in ["slope", "road slope", "incline", "dhalan"]):
-        return ("**🛣️ Road Slope (%)**: Yeh sadak ki dhalan (steepness) batata hai.\n"
-                "* **Positive Slope (+5%)** ka matlab hai **upar chadhna** (uphill), jismein energy **zyada** kharch hoti hai.\n"
-                "* **Negative Slope (-5%)** ka matlab hai **neeche utarna** (downhill), jahan regenerative braking se energy **recover** ho sakti hai.\n"
-                "* **0%** ka matlab hai **seedhi (flat) road**.")
+        return ("**🛣️ Road Slope (%)**: This describes the steepness of the road.\n"
+                "* **Positive Slope (+5%)** means **driving uphill**, which increases energy usage.\n"
+                "* **Negative Slope (-5%)** means **driving downhill**, where regenerative braking can **recover** energy.\n"
+                "* **0%** means a **flat road**.")
     
     elif any(keyword in prompt_lower for keyword in ["soc", "battery state", "battery percentage", "range"]):
-        return ("**🔋 Battery State of Charge (SOC) %**: Yeh batata hai ki aapki battery mein kitni energy bachi hai. Isse aapki bachi hui driving range nikalte hain.")
+        return ("**🔋 Battery State of Charge (SOC) %**: This is the remaining percentage of energy in your battery, used to calculate your remaining driving range.")
 
     elif any(keyword in prompt_lower for keyword in ["consumption", "kwh/km", "average"]):
-        return ("**⚡ Energy Consumption (kWh/km)**: Yeh batata hai ki aapki car ko 1 kilometer chalne mein kitni bijli (kWh) kharch hoti hai. **Jitna kam, utna behtar**.")
+        return ("**⚡ Energy Consumption (kWh/km)**: This is the core output—the energy (kWh) the car uses per kilometer. **Lower is always better**.")
     
     elif any(keyword in prompt_lower for keyword in ["road type", "highway", "urban", "rural"]):
-        return ("*Road Type: Yeh driving environment ko categorize karta hai, jo speed aur traffic ko affect karta hai. **1: Highway, **2: Urban*, *3: Rural*.")
+        return ("*Road Type: This categorizes the driving environment: **1: Highway, **2: Urban*, *3: Rural*. Each affects typical speed and traffic conditions.")
     
     return None
 
@@ -45,14 +46,15 @@ def handle_prediction_chat(user_prompt, model):
     # --- 1. Extract Numerical Values ---
     speed_match = re.search(r'(\d+)\s*km/?h|at\s*(\d+)', prompt_lower)
     battery_match = re.search(r'(\d+)\s*%', prompt_lower)
-    slope_match = re.search(r'slope\s*(\-?\+?\d+\.?\d*)', prompt_lower) # Slope extraction added
+    slope_match = re.search(r'slope\s*(\-?\+?\d+\.?\d*)', prompt_lower)
 
     # Assign extracted or default values
+    # speed_match.group(1) is for '80 km/h', group(2) is for 'at 80'
     speed = float(speed_match.group(1) or speed_match.group(2)) if speed_match else 60.0
     current_soc = float(battery_match.group(1)) if battery_match else 75.0
-    slope = float(slope_match.group(1)) if slope_match else 0.0 # Slope assignment
+    slope = float(slope_match.group(1)) if slope_match else 0.0
     
-    # --- 2. Extract Categorical Values ---
+    # --- 2. Extract Categorical Values (Using Defaults: Normal, Urban, Moderate Traffic) ---
     driving_mode = 2 
     if "eco" in prompt_lower: driving_mode = 1
     elif "sport" in prompt_lower: driving_mode = 3
@@ -61,8 +63,6 @@ def handle_prediction_chat(user_prompt, model):
     if "highway" in prompt_lower: road_type = 1
     elif "rural" in prompt_lower: road_type = 3
     
-    # Defaults for other parameters (Temp 25.0, Traffic 2)
-    
     # --- 3. Run Prediction ---
     try:
         if model is None:
@@ -70,11 +70,11 @@ def handle_prediction_chat(user_prompt, model):
 
         input_data_dict = cf.prepare_input(
             speed=speed, 
-            temp=25.0, 
+            temp=25.0, # Default Temp
             mode=driving_mode, 
             road=road_type, 
-            traffic=2, 
-            slope=slope, # <-- Slope passed here
+            traffic=2, # Default Traffic
+            slope=slope,
             battery_state=current_soc
         )
         consumption = cf.predict_energy_consumption_local(input_data_dict, model)
@@ -92,16 +92,16 @@ def handle_prediction_chat(user_prompt, model):
                 f"*Predicted Range*: **{predicted_range:.0f} km**\n"
                 f"*Green Skill: You are saving **{co2_saved_kg:.1f} kg CO2** on this range.")
 
-    except Exception:
-        # st.error(f"Prediction Error: {e}") # Error print na karein
-        return "Sorry, I could not find enough valid parameters (Speed and Battery %) in your query to run the prediction model. Please provide them explicitly."
+    except Exception as e:
+        # Generic error handling for failed regex or other issues
+        return "Sorry, I could not find enough parameters (Speed and Battery %) in your query to run the prediction model. Please provide them explicitly."
 
 
 # ====================================================================
 # MAIN CHATBOT INTERFACE
 # ====================================================================
 
-st.info("💡 NOTE: Ask about model features (e.g., **'Slope kya hai?'**), **predict range** (e.g., `predict range at 80km/h with 60% battery and 5% slope`), or **find the nearest charging station**.")
+st.info("💡 NOTE: Ask about model features (e.g., **'What is slope?'**), **predict range** (e.g., `predict range at 80km/h with 60% battery and 5% slope`), or **find the nearest charging station**.")
 
 if 'messages' not in st.session_state:
     st.session_state['messages'] = [{'role': 'assistant', 'content': 'Hello! Ask me about the model, or try *"Find nearest charging station"* to use the map. 📍'}]
@@ -124,7 +124,7 @@ if prompt := st.chat_input("Type your question here..."):
         # 2. Nearest Station Check (Map Integration)
         if response_text is None and ("nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower or "map" in prompt_lower)):
             
-            # Use the default/fallback location defined in common_functions (currently Bengaluru)
+            # This uses the coordinates defined in common_functions (currently Bengaluru) as the search center.
             user_lat, user_lon = cf.DEFAULT_LOCATION
             
             stations_df = cf.find_nearest_charging_stations(user_lat, user_lon)
@@ -135,18 +135,18 @@ if prompt := st.chat_input("Type your question here..."):
                 # Prepare data for map
                 stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
                 
-                # Display Map (streamlit map tries to use browser location if allowed)
+                # st.map will attempt to center on the user's browser location if permission is granted, 
+                # otherwise it centers on the station data.
                 st.map(stations_df, zoom=12, use_container_width=True)
                 
                 # Get distance details
                 nearest_details = cf.calculate_nearest_station_details(stations_df, user_lat, user_lon)
                 
-                # Final response (map will try to centre on the user's browser location if available)
                 st.info(f"The map attempts to use your current location, but the search was conducted around the default area (Lat: {user_lat:.2f}, Lon: {user_lon:.2f}).\n\n{nearest_details}")
                 response_text = "Here are the free stations I found on the map!"
             
             else:
-                response_text = f"I couldn't find any charging stations near the search area (within 5 km of default location). Maybe the data is missing, or try searching near a major city."
+                response_text = f"I couldn't find any charging stations near the search area (within 5 km of the default location). The data might be missing for this area."
 
 
         # 3. Try Prediction 
