@@ -1,6 +1,10 @@
 # pages/1_Dashboard.py
 
 import streamlit as st
+# pages/1_Dashboard.py (Top of the file)
+import streamlit as st
+import common_functions as cf
+from streamlit_extras.switch_page_button import switch_page 
 # Import common functions and model setup
 import common_functions as cf 
 
@@ -90,3 +94,34 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
             
     else:
         st.error("Model not loaded. Please ensure the model file is accessible.")
+
+
+# FLOATING CHATBOT BUTTON LOGIC
+# ====================================================================
+
+# 1. Custom CSS to float the button
+st.markdown("""
+<style>
+/* Fixes the position of the chatbot button */
+.floating-btn-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# 2. Render the button using HTML container
+with st.container():
+    st.markdown('<div class="floating-btn-container">', unsafe_allow_html=True)
+    
+    # The actual Streamlit button
+    if st.button("💬 Ask Assistant", key='float_chat_btn'):
+        # 3. Switch page function
+        switch_page("Smart Assistant") 
+
+    st.markdown('</div>', unsafe_allow_html=True)
+# ====================================================================
+
+
