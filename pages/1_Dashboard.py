@@ -93,33 +93,3 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
 
 
 
-# ====================================================================
-# FLOATING CHATBOT BUTTON LOGIC
-# ====================================================================
-
-from streamlit_extras.switch_page_button import switch_page # Zaroori Line!
-
-# 1. Custom CSS to float the button
-st.markdown("""
-<style>
-/* Fixes the position of the chatbot button */
-.floating-btn-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# 2. Render the button and logic
-with st.container():
-    st.markdown('<div class="floating-btn-container">', unsafe_allow_html=True)
-    
-    # The actual Streamlit button
-    if st.button("💬 Ask Assistant", key='float_chat_btn'):
-        # 3. Switch page function
-        switch_page("Smart Assistant") # Naam file se match hona chahie (bina 2_)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-# ====================================================================
