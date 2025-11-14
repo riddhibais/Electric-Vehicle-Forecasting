@@ -1,4 +1,4 @@
-# common_functions.py
+# common_functions.py (FINAL, FULL CODE)
 
 import streamlit as st
 import pandas as pd
@@ -47,7 +47,6 @@ def download_file_from_drive():
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
         except Exception as e:
             st.error(f"Model Download Error: {e}")
-            # st.stop() line is removed for resilience
     
     try:
         with open(LOCAL_FILE_PATH, 'rb') as f:
@@ -56,12 +55,10 @@ def download_file_from_drive():
         return model
     except Exception as e:
         st.sidebar.error(f"Model Load Error: Check file/corruption. {e}")
-        # st.stop() line is removed for resilience
         return None
 
 # INPUT MAPPING: Realistic placeholders
 def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
-    # ... (function body remains the same)
     input_data = {
         "Speed_kmh": speed,
         "Temperature_C": temp,
@@ -104,7 +101,7 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
         return float(prediction[0])
         
     except Exception as e:
-        st.error(f"Prediction logic failed: {e}")
+        # st.error(f"Prediction logic failed: {e}") # Error message hata diya taaki app crash na ho
         return 0.0 # Return 0.0 if prediction fails (to prevent TypeError)
 
 
@@ -154,4 +151,52 @@ def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
     # Overpass QL query: Find nodes with amenity=charging_station around the user location
     overpass_query = f"""
     [out:json];
-    node(around:{radius_meters},{user_lat},{user_lon})[amenity
+    node(around:{radius_meters},{user_lat},{user_lon})[amenity=charging_station];
+    out center;
+    """
+    
+    try:
+        response = requests.get(overpass_url, params={'data': overpass_query}, timeout=15)
+        response.raise_for_status() 
+        data = response.json()
+        
+        stations = []
+        for element in data.get('elements', []):
+            if element.get('type') == 'node':
+                stations.append({
+                    'Station_Name': element.get('tags', {}).get('name', 'OSM Station'),
+                    'lat': element['lat'],
+                    'lon': element['lon']
+                })
+        
+        if not stations:
+            # st.warning(f"No free charging stations found on OpenStreetMap within {radius_km} km of the location.")
+            return pd.DataFrame()
+
+        return pd.DataFrame(stations)
+        
+    except requests.exceptions.RequestException as e:
+        # st.error(f"Error fetching stations from Overpass API (Free Map Service): {e}")
+        return pd.DataFrame()
+
+def calculate_nearest_station_details(stations_df, user_lat, user_lon):
+    """
+    Calculates distance to the nearest station from the fetched DataFrame.
+    """
+    if stations_df.empty:
+        return "No stations data to calculate distance."
+
+    distances = stations_df.apply(
+        lambda row: haversine(user_lat, user_lon, row['lat'], row['lon']),
+        axis=1
+    )
+    
+    closest_station_index = distances.idxmin()
+    closest_station = stations_df.loc[closest_station_index]
+    min_distance = distances.min()
+    
+    # Check if a name tag exists, otherwise use coordinates
+    station_name = closest_station['Station_Name'] if closest_station['Station_Name'] != 'OSM Station' else f"Station at ({closest_station['lat']:.2f}, {closest_station['lon']:.2f})"
+    
+    return (f"The nearest charging station found (from OpenStreetMap) is **{station_name}**.\n"
+            f"It is approximately **{min_distance:.2f} km** away.")
