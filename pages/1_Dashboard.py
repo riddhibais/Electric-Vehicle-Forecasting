@@ -91,5 +91,17 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
     else:
         st.error("Model not loaded. Please ensure the model file is accessible.")
 
+# pages/1_Dashboard.py (AFTER all prediction/analysis logic)
 
+st.markdown("---")
+st.subheader("Need Help or Quick Prediction?")
+
+# This button uses Streamlit's native page linking feature.
+st.page_link(
+    "pages/2_Smart_Assistant.py", 
+    label="Go to Smart Assistant Chat 🤖", 
+    icon="💬"
+)
+
+# --- End of file ---
 
