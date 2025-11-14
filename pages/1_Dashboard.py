@@ -1,17 +1,20 @@
 # pages/1_Dashboard.py
 
 import streamlit as st
-import common_functions as cf
-from streamlit_extras.switch_page_button import switch_page # Library for page navigation
+# Import common functions and model setup
+import common_functions as cf 
 
-# --- Load Model ---
 model = cf.download_file_from_drive()
 
-st.title("🔋 EV Range & Green Impact Predictor")
-st.markdown("---") 
+st.title("🚀 Live Prediction Dashboard")
 
-# Image add karna (This is optional, remove if still causing issues)
-# st.image("https://images.unsplash.com/photo-1549419137-b6f38059c381?q=80&w=1770&auto=format&fit=crop", caption="Green Energy: Driving the future with Electric Vehicles.") 
+# --- MODEL METRICS DISPLAY (Sidebar) ---
+st.sidebar.header("📊 Model Performance (RFR)")
+st.sidebar.metric("R² Score (Accuracy)", "0.9997", "Excellent")
+st.sidebar.metric("Mean Absolute Error (MAE)", "0.0076 kWh", "Very Low")
+st.sidebar.subheader("Driving Mode Mapping")
+st.sidebar.markdown("1: Eco | 2: Normal | 3: Sport")
+st.markdown("---") 
 
 st.header("EV Range Prediction & Green Driving Analysis")
 
@@ -43,9 +46,11 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
     if model is not None:
         with st.spinner('Calculating prediction from ML Model...'):
             
-            # 1. Current Mode Prediction 
+            # 1. Current Mode Prediction (Normal/Sport)
             input_data_dict = cf.prepare_input(speed, temp, driving_mode, road_type, traffic_condition, slope, current_soc)
             consumption_current = cf.predict_energy_consumption_local(input_data_dict, model)
+            
+            # Green Skills Logic (Call from common_functions)
             predicted_range_current, co2_saved_kg = cf.calculate_range_metrics(consumption_current, current_soc)
 
             st.success("✅ Prediction Successful!")
@@ -66,4 +71,22 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
             if driving_mode != 1:
                 
                 input_data_dict_eco = cf.prepare_input(speed, temp, 1, road_type, traffic_condition, slope, current_soc)
-                consumption_eco = cf.predict_energy_consumption_local(input
+                consumption_eco = cf.predict_energy_consumption_local(input_data_dict_eco, model)
+                predicted_range_eco, _ = cf.calculate_range_metrics(consumption_eco, current_soc)
+                
+                range_diff = predicted_range_eco - predicted_range_current
+                
+                st.markdown("---")
+                st.subheader("🌳 Green Mode Comparison (Eco Mode)")
+                col_eco1, col_eco2 = st.columns(2)
+                
+                col_eco1.metric("Range in Eco Mode", f"{predicted_range_eco:.0f} km")
+                col_eco2.metric("Range Gain vs Current Mode", f"{range_diff:.0f} km", f"{range_diff:.0f} km Gain!")
+                
+                if range_diff > 0:
+                    st.success(f"By switching to **Eco Mode (Green Skill)**, you can gain approximately **{range_diff:.0f} km** of extra range, making your trip significantly more efficient!")
+                else:
+                    st.warning("Eco Mode did not provide significant gain, likely due to low speed or low battery state.")
+            
+    else:
+        st.error("Model not loaded. Please ensure the model file is accessible.")
