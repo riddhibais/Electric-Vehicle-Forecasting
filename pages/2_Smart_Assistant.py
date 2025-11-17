@@ -44,8 +44,46 @@ div.stAlert.st-info {
 # CHATBOT LOGIC FUNCTIONS 
 # ====================================================================
 
+# --- NEW FUNCTION: MODEL FEATURES EXPLANATION (IN ENGLISH) ---
+def get_model_features_explanation():
+    """Provides the comprehensive explanation of the model features, translated to English."""
+    return """
+**EV Range Prediction Model Features and Inputs**
+
+Our prediction model is based on a generic **60 kWh Long-Range Electric Vehicle (EV)**. Its purpose is to estimate the most accurate energy consumption (kWh/km) for your journey based on your current driving conditions.
+
+Based on this estimate, your **Approx. Predicted Range, Emission Offset, and Driving Efficiency** are calculated.
+
+---
+
+**🔍 Key Inputs (Which You Can Change on the Dashboard):**
+1. **Average Speed (km/h):** Higher speed typically increases energy consumption.
+2. **Driving Mode:** Eco (lowest consumption), Normal, and Sport (highest consumption).
+3. **Road Type:** Highway (constant speed, higher energy use) or Urban (stop-and-go, allows for regenerative braking).
+4. **Traffic Condition:** Low, Medium, or High (more idling and braking in high traffic).
+5. **Road Slope (%):** Uphill driving increases energy use; downhill allows energy recovery via regen braking.
+6. **Outside Temperature (°C):** Extreme temperatures (very hot or very cold) affect battery performance.
+7. **Current Battery State (SOC %):** The remaining energy percentage in your battery.
+
+---
+
+**🚗 Fixed Model Specifications (Default Values):**
+* **Usable Battery Capacity:** 60.0 kWh
+* **Vehicle Weight (Approx):** 2100 kg
+* **Max Theoretical Range:** $\\approx 500 \\text{ km}$ (at 100% SOC, under ideal conditions)
+
+---
+
+**🔌 Charging Station Logic:**
+
+For charging station information, we use **OpenStreetMap (Overpass API)**.
+* It searches for all **EV Charging Stations** within a **5 km** radius of the location you provide.
+* It provides the name of the nearest station and the approximate distance **(km)**.
+"""
+
+
 def handle_doubt_clearing(user_prompt):
-    """Provides detailed explanations for model features."""
+    """Provides detailed explanations for specific dashboard parameters."""
     prompt_lower = user_prompt.lower()
     
     if any(keyword in prompt_lower for keyword in ["slope", "road slope", "incline", "dhalan"]):
@@ -151,6 +189,10 @@ if prompt: # Standard check for input
         # 1. Doubt Clearing Check (PRIORITY 1)
         response_text = handle_doubt_clearing(prompt)
 
+        # 1.5. Model Features Check (NEW LOGIC)
+        if response_text is None and any(keyword in prompt_lower for keyword in ["model features", "what is this model", "inputs", "dashboard parameters", "what are features"]):
+            response_text = get_model_features_explanation()
+
         # 2. Nearest Station Check (Map Integration)
         if response_text is None and ("nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower or "map" in prompt_lower)):
             
@@ -191,7 +233,8 @@ if prompt: # Standard check for input
             # --- 2.2 Run Charging Station Search (Only if location was successfully found) ---
             if location_found: 
                 
-                stations_df = cf.find_nearest_charging_stations(search_center_lat, search_center_lon)
+                # NOTE: Radius is 5km in common_functions.py, but displaying 15km for better visibility on map.
+                stations_df = cf.find_nearest_charging_stations(search_center_lat, search_center_lon, radius_km=15)
                 
                 if not stations_df.empty:
                     # Stations found via OSM
@@ -199,13 +242,16 @@ if prompt: # Standard check for input
                     stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
                     st.map(stations_df, zoom=12, use_container_width=True)
                     
-                    nearest_details = cf.calculate_nearest_station_details(stations_df, search_center_lat, search_center_lon)
+                    # Recalculate nearest using the default 5km from common_functions logic internally
+                    stations_df_5km = cf.find_nearest_charging_stations(search_center_lat, search_center_lon, radius_km=5)
+                    
+                    nearest_details = cf.calculate_nearest_station_details(stations_df_5km, search_center_lat, search_center_lon)
                     gmaps_search_query = f"EV Charging Stations near {location_name.title()}"
                     gmaps_url = cf.generate_gmaps_url(gmaps_search_query, is_search=True)
                     
                     response_text = (
                         f"Here are the stations I found based on the 15 km search radius around **{location_name.title()}**.\n\n"
-                        f"{nearest_details}\n\n"
+                        f"**Closest Station (within 5km):**\n{nearest_details}\n\n"
                         f"**🗺️ External Map Link:**\n"
                         f"If you want to see more options and private chargers, click here: "
                         f"**➡️ [Search Charging Stations on Google Maps]({gmaps_url})**"
