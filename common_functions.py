@@ -29,7 +29,7 @@ DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc'
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
 # Green Skills and Vehicle Constants
-TOTAL_USABLE_BATTERY_KWH = 60.0
+TOTAL_USABLE_BATTERY_KWH = 30.0
 EMISSION_FACTOR_KG_PER_KM = 0.18 
 
 # IMPORTANT: Feature Names for Model Input
@@ -144,7 +144,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return EARTH_RADIUS_KM * c
 # common_functions.py
 
-# ... (DEFAULT_LOCATION ke neeche)
+
 
 def get_coordinates_from_query(query):
     """Converts a location query (e.g., 'Mumbai') into (lat, lon) using Nominatim."""
