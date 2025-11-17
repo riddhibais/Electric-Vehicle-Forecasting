@@ -1,4 +1,4 @@
-# pages/1_Dashboard.py
+#pages/1_Range_Predictor.py
 
 # --- 1. IMPORTS 
 import streamlit as st
