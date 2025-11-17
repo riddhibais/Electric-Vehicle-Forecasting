@@ -8,7 +8,7 @@ model = cf.download_file_from_drive()
 
 st.title("💬 Smart Assistant: Green Driving & Charging")
 st.markdown("---") 
-# pages/2_Smart_Assistant.py ke CSS block ko replace karein
+# pages/2_Smart_Assistant.py 
 
 st.markdown("""
 <style>
@@ -44,7 +44,7 @@ div.stAlert.st-info {
 # CHATBOT LOGIC FUNCTIONS 
 # ====================================================================
 
-# --- NEW FUNCTION: MODEL FEATURES EXPLANATION (IN ENGLISH) ---
+# --- NEW FUNCTION: MODEL FEATURES EXPLANATION  ---
 def get_model_features_explanation():
     """Provides the comprehensive explanation of the model features, translated to English."""
     return """
