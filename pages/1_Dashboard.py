@@ -31,7 +31,7 @@ st.title("📈 EV Range Prediction Dashboard")
 
 model = cf.download_file_from_drive()
 
-st.title("🚀 Live Prediction Dashboard")
+
 
 # --- MODEL METRICS DISPLAY (Sidebar) ---
 st.sidebar.header("📊 Model Performance (RFR)")
