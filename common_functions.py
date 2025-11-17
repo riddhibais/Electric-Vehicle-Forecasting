@@ -1,5 +1,3 @@
-# common_functions.py
-
 import streamlit as st
 import pandas as pd
 from geopy.geocoders import Nominatim
@@ -24,7 +22,6 @@ DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc'
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
 # Green Skills and Vehicle Constants
-# 🟢 CHANGE: Increased to 60.0 kWh for higher range (approx 400 km @ 100%)
 TOTAL_USABLE_BATTERY_KWH = 60.0 
 EMISSION_FACTOR_KG_PER_KM = 0.18 
 MODEL_SCALING_FACTOR = 70.0 
@@ -84,7 +81,7 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
     global MODEL_SCALING_FACTOR 
     
     if loaded_model is None:
-        return 0.11 
+        return 0.15 # Default consumption (conservative)
 
     try: 
         input_data = pd.DataFrame(0, index=[0], columns=FEATURE_NAMES)
@@ -101,16 +98,18 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
         prediction = loaded_model.predict(input_df)
         consumption = float(prediction[0])
         
-        # FINAL SCALING FIX: Corrects consumption to a realistic kWh/km value
-        consumption_scaled = max(consumption / MODEL_SCALING_FACTOR, 0.05)
+        # 🟢 CONSERVATIVE FIX: Minimum consumption floor increased to 0.12 kWh/km
+        # This limits the maximum possible range to 500 km (60 kWh / 0.12)
+        consumption_scaled = max(consumption / MODEL_SCALING_FACTOR, 0.12)
         
+        # Upper bound (for high-speed/sport mode)
         if consumption_scaled > 0.35:
              consumption_scaled = 0.35 
 
         return consumption_scaled
         
     except Exception as e:
-        return 0.11 
+        return 0.15 # Fallback to a safe, typical consumption rate
 
 
 # GREEN SKILLS LOGIC
