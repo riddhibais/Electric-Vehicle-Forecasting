@@ -114,18 +114,24 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
             
             # Display Current Metrics
             colA.metric("Predicted Consumption", f"{consumption_current:.4f} kWh/km")
-            colB.metric("Predicted Range", f"{predicted_range_current:.0f} km")
+            
+            # 🟢 CHANGE 1: Added "Approx." word
+            colB.metric("Approx. Predicted Range", f"{predicted_range_current:.0f} km")
             
             # Display Green Skill 1: Emission Offset
-            colC.metric("Emission Offset (CO2 Saved)", f"{co2_saved_kg:.1f} kg", "Green Skill")
+            colC.metric("Emission Offset (CO2 Saved)", f"{co2_saved_kg:.1f} kg", "🔥 Green Impact!")
             
             # Display Driving Efficiency 
             colD.metric("Driving Efficiency", f"{100 - (consumption_current * 100):.1f} %", "High Score!")
             
             st.markdown("---")
-            st.subheader("💡 Analysis")
+            st.subheader("💡 Green Skill Analysis (Approximate Values)")
 
-            st.info(f"On a *{road_type_name}* road in *{driving_mode_name} Mode*, your vehicle can travel approximately **{predicted_range_current:.0f} km** while saving **{co2_saved_kg:.1f} kg** of CO2 emissions compared to a fossil fuel car.")
+            # 🟢 CHANGE 2: Added 60 kWh EV model disclaimer and "approximately"
+            st.info(
+                f"⚠️ **Note:** These calculations are based on a generic **60 kWh Long-Range EV** (Approx. 400-450 km full range), as energy consumption varies significantly between car models.\n\n"
+                f"On a *{road_type_name}* road in *{driving_mode_name} Mode*, this vehicle can travel **approximately** **{predicted_range_current:.0f} km** while saving **{co2_saved_kg:.1f} kg** of CO2 emissions compared to a fossil fuel car."
+            )
             
             # 2. Green Skill 2: Eco Mode Comparison
             if driving_mode != 1:
@@ -137,14 +143,15 @@ if st.button("Predict Range & Green Impact", key='predict_btn', use_container_wi
                 range_diff = predicted_range_eco - predicted_range_current
                 
                 st.markdown("---")
-                st.subheader("🌳 Green Mode Comparison (Eco Mode)")
+                st.subheader("🌳 Eco Mode Benefit (Maximize Range)")
                 col_eco1, col_eco2 = st.columns(2)
                 
-                col_eco1.metric("Range in Eco Mode", f"{predicted_range_eco:.0f} km")
+                # 🟢 CHANGE 3: Added "Approx." word
+                col_eco1.metric("Approx. Range in Eco Mode", f"{predicted_range_eco:.0f} km")
                 col_eco2.metric("Range Gain vs Current Mode", f"{range_diff:.0f} km", f"{range_diff:.0f} km Gain!")
                 
                 if range_diff > 0:
-                    st.success(f"By switching to *Eco Mode* (Green Skill), you can gain approximately **{range_diff:.0f} km** of extra range, making your trip significantly more efficient!")
+                    st.success(f"By switching to *Eco Mode* (Green Skill), you can gain **approximately** **{range_diff:.0f} km** of extra range, making your trip significantly more efficient!")
                 else:
                     st.warning("Eco Mode did not provide significant gain, likely due to low speed or low battery state.")
             
