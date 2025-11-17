@@ -8,6 +8,37 @@ model = cf.download_file_from_drive()
 
 st.title("💬 Smart Assistant: Green Driving & Charging")
 st.markdown("---") 
+# pages/2_Smart_Assistant.py ke CSS block ko replace karein
+
+st.markdown("""
+<style>
+
+.stApp {
+    background-color: #f0fff0; /* Lightest Mint Green */
+}
+
+
+[data-testid="stSidebar"] {
+    background-color: #e6ffe6; 
+}
+
+/* Main Title: Dark Green */
+h1 {color: #00796b; text-align: center; font-weight: 700;} 
+
+
+.main {
+    background-color: rgba(255, 255, 255, 0.7); /* Thoda transparent white */
+    padding: 1rem;
+    border-radius: 10px;
+}
+
+div.stAlert.st-info {
+    background-color: #f0fff0;
+    border-left: 5px solid #00796b;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ====================================================================
 # CHATBOT LOGIC FUNCTIONS 
