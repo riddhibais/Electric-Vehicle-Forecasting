@@ -1,8 +1,33 @@
 # pages/1_Dashboard.py
 
 import streamlit as st
+
+
+
 # Import common functions and model setup
 import common_functions as cf 
+import streamlit as st
+# ... (Baaki imports yahan honge)
+
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Dashboard | Range Prediction",
+    page_icon="📈",
+    layout="wide", 
+)
+
+# --- Custom Styling ---
+st.markdown("""
+<style>
+h1 {color: #00796b; text-align: center;} 
+h3 {color: #4CAF50;}
+</style>
+""", unsafe_allow_html=True) 
+
+# --- Title ---
+st.title("📈 EV Range Prediction Dashboard")
+# ... (Baaki ka Dashboard code yahan se shuru hoga)
+
 
 model = cf.download_file_from_drive()
 
