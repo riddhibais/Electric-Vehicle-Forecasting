@@ -1,4 +1,4 @@
-# common_functions.py (FINAL, FULL CODE with Range Fix)
+# common_functions.py
 
 import streamlit as st
 import pandas as pd
@@ -10,27 +10,25 @@ import gdown
 import os 
 import re 
 from math import radians, sin, cos, sqrt, atan2
-import requests # Used for free Overpass API
+import requests 
 
 # ==============================================================================
-# ⚠️ CONFIGURATION: CONSTANTS & MODEL SETUP
+# CONFIGURATION: CONSTANTS & MODEL SETUP
 # ==============================================================================
 
-# --- MAPS CONFIGURATION (NO KEY NEEDED) ---
 gmaps_client = None 
-DEFAULT_LOCATION = [21.2500, 81.6300] # Default: Raipur, CG
+DEFAULT_LOCATION = [21.2500, 81.6300] 
 EARTH_RADIUS_KM = 6371
 
-# Model ID and Path
 DRIVE_FILE_ID = '11DRnNwkkYM9OxZELxU93B0pvFjLQYiwc' 
 LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 
 # Green Skills and Vehicle Constants
-TOTAL_USABLE_BATTERY_KWH = 30.0 # Standard compact EV (30 kWh) ke liye set
+# 🟢 CHANGE: Increased to 60.0 kWh for higher range (approx 400 km @ 100%)
+TOTAL_USABLE_BATTERY_KWH = 60.0 
 EMISSION_FACTOR_KG_PER_KM = 0.18 
-MODEL_SCALING_FACTOR = 70.0 # 🟢 FIX: Used to correct the unrealistic high output scale of the ML model
+MODEL_SCALING_FACTOR = 70.0 
 
-# IMPORTANT: Feature Names for Model Input
 FEATURE_NAMES = [
     'Speed_kmh', 'Acceleration_ms2', 'Battery_State_%', 'Battery_Voltage_V', 
     'Battery_Temperature_C', 'Slope_%', 'Temperature_C', 'Humidity_%', 
@@ -44,7 +42,6 @@ FEATURE_NAMES = [
 # --- DOWNLOAD & LOAD MODEL FUNCTION ---
 @st.cache_resource
 def download_file_from_drive():
-    """Tries to download and load the ML model."""
     if not os.path.exists(LOCAL_FILE_PATH):
         try:
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
@@ -60,7 +57,7 @@ def download_file_from_drive():
         st.sidebar.error(f"Model Load Error: Check file/corruption. {e}")
         return None
 
-# INPUT MAPPING: Realistic placeholders
+# INPUT MAPPING
 def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
     input_data = {
         "Speed_kmh": speed,
@@ -83,17 +80,15 @@ def prepare_input(speed, temp, mode, road, traffic, slope, battery_state):
     return input_data
 
 def predict_energy_consumption_local(input_data_dict, loaded_model):
-    """
-    Handles data preparation, local prediction, and applies a scaling factor 
-    to correct unrealistic ML model output.
-    """
+    
+    global MODEL_SCALING_FACTOR 
+    
     if loaded_model is None:
-        return 0.11 # Default realistic consumption if model fails
-        
+        return 0.11 
+
     try: 
         input_data = pd.DataFrame(0, index=[0], columns=FEATURE_NAMES)
         
-        # Fill values from the received data and apply One-Hot Encoding
         for key, value in input_data_dict.items():
             if key in input_data.columns:
                 input_data.loc[0, key] = value
@@ -106,32 +101,29 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
         prediction = loaded_model.predict(input_df)
         consumption = float(prediction[0])
         
-        # --- 🟢 FINAL SCALING FIX (Range Realism) ---
+        # FINAL SCALING FIX: Corrects consumption to a realistic kWh/km value
         consumption_scaled = max(consumption / MODEL_SCALING_FACTOR, 0.05)
         
-        # Ensure it doesn't go unrealistically high (max realistic consumption)
         if consumption_scaled > 0.35:
              consumption_scaled = 0.35 
 
         return consumption_scaled
         
     except Exception as e:
-        # Prediction logic fail hone par default realistic value de
         return 0.11 
 
 
 # GREEN SKILLS LOGIC
 def calculate_range_metrics(consumption, current_soc):
-    """Calculates remaining energy, predicted range, and CO2 savings."""
     
-    # Safety check: Ensures input is a valid positive number
+    global TOTAL_USABLE_BATTERY_KWH
+    
     if not isinstance(consumption, (int, float)) or consumption <= 0.0001:
         return 0.0, 0.0 
 
     remaining_energy = TOTAL_USABLE_BATTERY_KWH * (current_soc / 100)
     predicted_range = remaining_energy / consumption if consumption > 0 else 0.0
     
-    # Emission Offset (Green Skill 1)
     co2_saved_kg = predicted_range * EMISSION_FACTOR_KG_PER_KM
 
     return predicted_range, co2_saved_kg
@@ -142,7 +134,6 @@ def calculate_range_metrics(consumption, current_soc):
 # ====================================================================
 
 def haversine(lat1, lon1, lat2, lon2):
-    """Calculates the distance between two points on the earth in kilometers."""
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
 
     dlon = lon2 - lon1
@@ -155,7 +146,6 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def get_coordinates_from_query(query):
-    """Converts a location query (e.g., 'Mumbai') into (lat, lon) using Nominatim."""
     geolocator = Nominatim(user_agent="EV_App_Assistant")
     try:
         location = geolocator.geocode(query, timeout=5)
@@ -166,28 +156,18 @@ def get_coordinates_from_query(query):
         return None, None, None
 
 def generate_gmaps_url(query, is_search=False):
-    """Generates a Google Maps URL for the given query (address or search)."""
-    # NOTE: The base_url format might be slightly incorrect, but functionally it works for search/place intents
     base_url = "https://www.google.com/maps/"
     if is_search:
-        # For searching 'Charging Stations near Mumbai'
         return f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
     else:
-        # For an address/location
         return f"https://www.google.com/maps/place/{query.replace(' ', '+')}"
 
 
-
 def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
-    """
-    Finds charging stations using the free Overpass API (OpenStreetMap data)
-    """
     
-    # Overpass Query: find EV charging nodes within radius
     overpass_url = "http://overpass-api.de/api/interpreter"
     radius_meters = radius_km * 1000
     
-    # Overpass QL query: Find nodes with amenity=charging_station around the user location
     overpass_query = f"""
     [out:json];
     node(around:{radius_meters},{user_lat},{user_lon})[amenity=charging_station];
@@ -217,9 +197,6 @@ def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
         return pd.DataFrame()
 
 def calculate_nearest_station_details(stations_df, user_lat, user_lon):
-    """
-    Calculates distance to the nearest station from the fetched DataFrame.
-    """
     if stations_df.empty:
         return "No stations data to calculate distance."
 
@@ -232,7 +209,6 @@ def calculate_nearest_station_details(stations_df, user_lat, user_lon):
     closest_station = stations_df.loc[closest_station_index]
     min_distance = distances.min()
     
-    # Check if a name tag exists, otherwise use coordinates
     station_name = closest_station['Station_Name'] if closest_station['Station_Name'] != 'OSM Station' else f"Station at ({closest_station['lat']:.2f}, {closest_station['lon']:.2f})"
     
     return (f"The nearest charging station found (from OpenStreetMap) is **{station_name}**.\n"
