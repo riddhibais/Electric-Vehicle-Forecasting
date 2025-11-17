@@ -1,9 +1,9 @@
 # pages/1_Dashboard.py
 
-# --- 1. IMPORTS (Saare imports top par) ---
+# --- 1. IMPORTS 
 import streamlit as st
 import common_functions as cf
-import pandas as pd # Agar zaroorat padi toh
+import pandas as pd 
 
 # --- 2. MODEL LOADING ---
 model = cf.download_file_from_drive()
@@ -18,6 +18,46 @@ st.set_page_config(
 # --- 4. TITLE (Simple Title) ---
 st.title("📈 EV Range Prediction Dashboard")
 st.markdown("---") 
+
+
+st.markdown("""
+<style>
+/* --- APP BACKGROUND: EK DUM LIGHT GREEN --- */
+.stApp {
+    background-color: #f0fff0; /* Lightest Mint Green/Halka Hare rang */
+}
+
+/* Main Title: Dark Green */
+h1 {color: #00796b; text-align: center; font-weight: 700;} 
+/* Subheaders: Bright Green */
+h3 {color: #4CAF50;}
+
+/* Sidebar background ko bhi halka green touch */
+[data-testid="stSidebar"] {
+    background-color: #e6ffe6; /* Thoda zyada green taaki alag dikhe */
+}
+
+/* Success/Info Boxes ko Green Skill look dena */
+div.stAlert.st-success { 
+    background-color: #e6ffe6; /* Light Green */
+    border-left: 5px solid #4CAF50;
+    color: #00796b; 
+}
+/* Info boxes ko bhi halka green touch */
+div.stAlert.st-info {
+    background-color: #f0fff0;
+    border-left: 5px solid #00796b;
+}
+/* Button ko thoda solid green color */
+.stButton>button {
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 8px;
+}
+</style>
+""", unsafe_allow_html=True) 
+
+
 
 # --- 5. SIDEBAR METRICS ---
 st.sidebar.header("📊 Model Performance (RFR)")
