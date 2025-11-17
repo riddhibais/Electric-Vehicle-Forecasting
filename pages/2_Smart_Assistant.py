@@ -77,7 +77,7 @@ Based on this estimate, your **Approx. Predicted Range, Emission Offset, and Dri
 **🔌 Charging Station Logic:**
 
 For charging station information, we use **OpenStreetMap (Overpass API)**.
-* It searches for all **EV Charging Stations** within a **5 km** radius of the location you provide.
+* It searches for all **EV Charging Stations** within a **15 km** radius of the location you provide.
 * It provides the name of the nearest station and the approximate distance **(km)**.
 """
 
@@ -251,9 +251,9 @@ if prompt: # Standard check for input
                     
                     response_text = (
                         f"Here are the stations I found based on the 15 km search radius around **{location_name.title()}**.\n\n"
-                        f"**Closest Station (within 5km):**\n{nearest_details}\n\n"
+                      
                         f"**🗺️ External Map Link:**\n"
-                        f"If you want to see more options and private chargers, click here: "
+                        f"If you want to see more options, click here: "
                         f"**➡️ [Search Charging Stations on Google Maps]({gmaps_url})**"
                     )
                 
