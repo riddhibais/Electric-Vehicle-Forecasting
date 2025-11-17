@@ -22,41 +22,44 @@ st.markdown("---")
 
 st.markdown("""
 <style>
-/* --- APP BACKGROUND: EK DUM LIGHT GREEN --- */
+
+/* Main App Background */
 .stApp {
-    background-color: #f0fff0; /* Lightest Mint Green/Halka Hare rang */
+    background-color: #f0fff0; /* Light Mint Green */
 }
 
-/* Main Title: Dark Green */
+/* Main Title Styling (Dark Green, Centered) */
 h1 {color: #00796b; text-align: center; font-weight: 700;} 
-/* Subheaders: Bright Green */
+
+/* Subheader Styling (Bright Green) */
 h3 {color: #4CAF50;}
 
-/* Sidebar background ko bhi halka green touch */
+/* Sidebar Background */
 [data-testid="stSidebar"] {
-    background-color: #e6ffe6; /* Thoda zyada green taaki alag dikhe */
+    background-color: #e6ffe6; /* Slightly darker green for contrast */
 }
 
-/* Success/Info Boxes ko Green Skill look dena */
+/* Success Alert Styling (Green Skill Look) */
 div.stAlert.st-success { 
-    background-color: #e6ffe6; /* Light Green */
+    background-color: #e6ffe6;
     border-left: 5px solid #4CAF50;
     color: #00796b; 
 }
-/* Info boxes ko bhi halka green touch */
+
+/* Info Alert Styling */
 div.stAlert.st-info {
     background-color: #f0fff0;
     border-left: 5px solid #00796b;
 }
-/* Button ko thoda solid green color */
+
+/* Button Styling (Solid Green) */
 .stButton>button {
     background-color: #4CAF50;
     color: white;
     border-radius: 8px;
 }
 </style>
-""", unsafe_allow_html=True) 
-
+""", unsafe_allow_html=True)
 
 
 # --- 5. SIDEBAR METRICS ---
