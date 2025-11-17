@@ -121,14 +121,17 @@ if prompt := st.chat_input("Type your question here..."):
         # 1. Doubt Clearing Check (PRIORITY 1)
         response_text = handle_doubt_clearing(prompt)
 
-       # 2. Nearest Station Check (Map Integration)
+      # 2. Nearest Station Check (Map Integration)
         if response_text is None and ("nearest" in prompt_lower and ("station" in prompt_lower or "charger" in prompt_lower or "map" in prompt_lower)):
             
-            # --- Attempt to extract a city/location name from the prompt ---
+            location_name = None # Initialize location_name
+            search_center_lat, search_center_lon = None, None
+
+            # --- 2.1 Attempt to extract a city/location name from the prompt ---
             search_query_match = re.search(r'near\s+(.+)', prompt_lower)
             
             if search_query_match:
-                # User provided a specific location (e.g., "near Mumbai")
+                # Case A: User provided a specific location (e.g., "near Mumbai")
                 location_name = search_query_match.group(1).strip()
                 st.info(f"Searching for stations near: **{location_name.title()}**")
                 
@@ -136,34 +139,36 @@ if prompt := st.chat_input("Type your question here..."):
                 user_lat, user_lon, full_address = cf.get_coordinates_from_query(location_name)
                 
                 if user_lat is None:
-                    response_text = f"❌ Sorry, I couldn't find the coordinates for **{location_name.title()}**. Please try a different name or a major city."
-                    # Still provide Google Maps link as a fallback
+                    # Geocoding failed
                     gmaps_url = cf.generate_gmaps_url(f"EV Charging Stations near {location_name.title()}", is_search=True)
-                    response_text += f"\n\n**Tip:** Aap direct [Google Maps]({gmaps_url}) par search kar sakte hain."
+                    response_text = (
+                        f"❌ Sorry, I couldn't find the coordinates for **{location_name.title()}**. Please try a different name or a major city.\n\n"
+                        f"**Tip:** You can search directly on [Google Maps]({gmaps_url})."
+                    )
                 else:
                     search_center_lat, search_center_lon = user_lat, user_lon
+            
             else:
-                # User did NOT provide a specific location (Use default/fallback)
-                location_name = "Default Location (Bengaluru)"
-                search_center_lat, search_center_lon = cf.DEFAULT_LOCATION
-                st.info(f"Searching for stations near the **{location_name}** fallback coordinates.")
-
-
-            # --- Run Charging Station Search ---
-            if response_text is None:
+                # Case B: User asked for charging station without specifying location (PROMPT THE USER)
+                response_text = (
+                    "**🌎 Location Required!**\n\n"
+                    "Please enter the **city or area name** for the search, like:\n"
+                    "👉 **`Find nearest charging station near Mumbai`**"
+                )
+                
+            # --- 2.2 Run Charging Station Search (Only if response_text is still None, meaning location was found) ---
+            if response_text is None: 
+                
                 # Assuming radius is 15km in common_functions.py
                 stations_df = cf.find_nearest_charging_stations(search_center_lat, search_center_lon)
                 
                 if not stations_df.empty:
+                    # Stations found via OSM
                     st.subheader(f"📍 Charging Stations Found (15km Radius)")
-                    
                     stations_df.rename(columns={'lat': 'latitude', 'lon': 'longitude'}, inplace=True)
                     st.map(stations_df, zoom=12, use_container_width=True)
                     
-                    # Get distance details
                     nearest_details = cf.calculate_nearest_station_details(stations_df, search_center_lat, search_center_lon)
-                    
-                    # Generate External Google Maps Link
                     gmaps_search_query = f"EV Charging Stations near {location_name.title()}"
                     gmaps_url = cf.generate_gmaps_url(gmaps_search_query, is_search=True)
                     
@@ -171,27 +176,18 @@ if prompt := st.chat_input("Type your question here..."):
                         f"Here are the stations I found based on the 15 km search radius around **{location_name.title()}**.\n\n"
                         f"{nearest_details}\n\n"
                         f"**🗺️ External Map Link:**\n"
-                        f"Agar aap **Google Maps** mein aur options dekhna chahte hain, toh yahan click karein: "
-                        f"[Open in Google Maps]({gmaps_url})"
+                        f"If you want to see more options and private chargers, click here: "
+                        f"**➡️ [Search Charging Stations on Google Maps]({gmaps_url})**"
                     )
                 
                 else:
-                    # No stations found in the 15km radius
-                    response_text = f"I couldn't find any charging stations near **{location_name.title()}** (within 15 km). The data might be missing for this area."
-                    # Still provide the Google Maps link for external search
+                    # Case C: No stations found via OSM, but location was valid
+                    
                     gmaps_search_query = f"EV Charging Stations near {location_name.title()}"
                     gmaps_url = cf.generate_gmaps_url(gmaps_search_query, is_search=True)
-                    response_text += f" You can try searching directly on [Google Maps]({gmaps_url})."
-            
-            
-
-        # 3. Try Prediction 
-        if response_text is None:
-            response_text = handle_prediction_chat(prompt, model)
-        
-        # 4. Generic Reply 
-        if response_text is None:
-            response_text = "I'm sorry, I can only answer questions related to the **EV model features**, **predict range**, or **find the nearest charging station**."
-
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        st.chat_message("assistant").write(response_text)
+                    
+                    response_text = (
+                        f"**⚠️ Search Result:** No free charging stations were found in the 15 km radius around **{location_name.title()}** based on OpenStreetMap (OSM) data.\n\n"
+                        f"**View Now:** You can instantly see all available charging stations (public, private, etc.) in this area directly on Google Maps.\n"
+                        f"**➡️ [Search Charging Stations on Google Maps]({gmaps_url})**"
+                    )
