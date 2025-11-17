@@ -1,7 +1,11 @@
-# .streamlit/config.toml
 [theme]
-base="light"
-primaryColor="#4F8BF9"
+# Primary color for buttons and links
+primaryColor="#4CAF50"
+# Background color of the main content area
 backgroundColor="#FFFFFF"
+# Background color of the sidebar and headers
 secondaryBackgroundColor="#F0F2F6"
-textColor="#31333F"
+# Color used for text
+textColor="#333333"
+# Font used
+font="sans serif"
