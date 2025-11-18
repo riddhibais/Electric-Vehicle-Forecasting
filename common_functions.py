@@ -1,7 +1,8 @@
-
 import streamlit as st
 import pandas as pd
 from geopy.geocoders import Nominatim
+# Importer Group: Geopy is a critical external library here
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 import numpy as np
 import pickle 
@@ -26,7 +27,6 @@ LOCAL_FILE_PATH = 'ev_energy_consumption_model.pkl'
 TOTAL_USABLE_BATTERY_KWH = 60.0 
 EMISSION_FACTOR_KG_PER_KM = 0.18 
 # 🟢 FIX: SCALING FACTOR REDUCED to 55.0 to ensure dynamic range 
-# (Consumption changes based on Speed/Mode, but max range remains realistic)
 MODEL_SCALING_FACTOR = 55.0 
 
 FEATURE_NAMES = [
@@ -48,7 +48,7 @@ def download_file_from_drive():
             gdown.download(id=DRIVE_FILE_ID, output=LOCAL_FILE_PATH, quiet=False)
         except Exception as e:
             st.error(f"Model Download Error: {e}")
-    
+
     try:
         with open(LOCAL_FILE_PATH, 'rb') as f:
             model = pickle.load(f)
@@ -86,13 +86,13 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
     to correct unrealistic ML model output while ensuring dynamic range.
     """
     global MODEL_SCALING_FACTOR 
-    
+
     if loaded_model is None:
         return 0.15 # Default consumption (conservative)
 
     try: 
         input_data = pd.DataFrame(0, index=[0], columns=FEATURE_NAMES)
-        
+
         # Fill values and apply One-Hot Encoding
         for key, value in input_data_dict.items():
             if key in input_data.columns:
@@ -105,16 +105,16 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
         input_df = input_data[FEATURE_NAMES]
         prediction = loaded_model.predict(input_df)
         consumption = float(prediction[0])
-        
+
         # Min consumption floor: Ensures max range is 500 km (60 kWh / 0.12)
         consumption_scaled = max(consumption / MODEL_SCALING_FACTOR, 0.12)
-        
+
         # Upper bound (for high-speed/sport mode)
         if consumption_scaled > 0.35:
              consumption_scaled = 0.35 
 
         return consumption_scaled
-        
+
     except Exception as e:
         # Prediction logic fail hone par safe, typical value de
         return 0.15 
@@ -123,15 +123,15 @@ def predict_energy_consumption_local(input_data_dict, loaded_model):
 # GREEN SKILLS LOGIC
 def calculate_range_metrics(consumption, current_soc):
     """Calculates remaining energy, predicted range, and CO2 savings."""
-    
+
     global TOTAL_USABLE_BATTERY_KWH
-    
+
     if not isinstance(consumption, (int, float)) or consumption <= 0.0001:
         return 0.0, 0.0 
 
     remaining_energy = TOTAL_USABLE_BATTERY_KWH * (current_soc / 100)
     predicted_range = remaining_energy / consumption if consumption > 0 else 0.0
-    
+
     # Emission Offset (Green Skill 1)
     co2_saved_kg = predicted_range * EMISSION_FACTOR_KG_PER_KM
 
@@ -151,20 +151,35 @@ def haversine(lat1, lon1, lat2, lon2):
 
     a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    
+
     return EARTH_RADIUS_KM * c
 
 
 def get_coordinates_from_query(query):
-    """Converts a location query (e.g., 'Mumbai') into (lat, lon) using Nominatim."""
-    geolocator = Nominatim(user_agent="EV_App_Assistant")
-    try:
-        location = geolocator.geocode(query, timeout=5)
-        if location:
-            return location.latitude, location.longitude, location.address
-        return None, None, None
-    except Exception:
-        return None, None, None
+    """
+    Converts a location query into (lat, lon) using Nominatim with retry mechanism.
+    FIX: Added robust timeout and service error handling for Nominatim.
+    """
+    geolocator = Nominatim(user_agent="EV_App_Assistant_V2")
+    max_attempts = 3
+    
+    for attempt in range(max_attempts):
+        try:
+            # Increased timeout for reliability
+            location = geolocator.geocode(query, timeout=10) 
+            if location:
+                return location.latitude, location.longitude, location.address
+            # If location is None, break and return failure after first attempt
+            break 
+        except (GeocoderTimedOut, GeocoderServiceError, requests.exceptions.RequestException):
+            if attempt < max_attempts - 1:
+                time.sleep(1) # Wait before retry
+                continue
+            break
+        except Exception:
+            break
+            
+    return None, None, None
 
 def generate_gmaps_url(query, is_search=False):
     """Generates a Google Maps URL for the given query (address or search)."""
@@ -179,25 +194,26 @@ def generate_gmaps_url(query, is_search=False):
 
 def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
     """
-    Finds charging stations using the free Overpass API (OpenStreetMap data)
+    Finds charging stations using the free Overpass API (OpenStreetMap data).
+    FIX: Changed Overpass URL to the more robust 'https' version.
     """
-    
     # Overpass Query: find EV charging nodes within radius
-    overpass_url = "http://overpass-api.de/api/interpreter"
+    overpass_url = "https://overpass-api.de/api/interpreter" # Changed to HTTPS
     radius_meters = radius_km * 1000
-    
+
     # Overpass QL query: Find nodes with amenity=charging_station around the user location
     overpass_query = f"""
     [out:json];
     node(around:{radius_meters},{user_lat},{user_lon})[amenity=charging_station];
     out center;
     """
-    
+
     try:
-        response = requests.get(overpass_url, params={'data': overpass_query}, timeout=15)
+        # Increased timeout for large responses/slow connections
+        response = requests.get(overpass_url, params={'data': overpass_query}, timeout=30) 
         response.raise_for_status() 
         data = response.json()
-        
+
         stations = []
         for element in data.get('elements', []):
             if element.get('type') == 'node':
@@ -206,13 +222,14 @@ def find_nearest_charging_stations(user_lat, user_lon, radius_km=5):
                     'lat': element['lat'],
                     'lon': element['lon']
                 })
-        
+
         if not stations:
             return pd.DataFrame()
 
         return pd.DataFrame(stations)
-        
+
     except requests.exceptions.RequestException as e:
+        # st.error(f"Overpass API Error: {e}") # Debugging removed for clean running
         return pd.DataFrame()
 
 def calculate_nearest_station_details(stations_df, user_lat, user_lon):
@@ -226,13 +243,14 @@ def calculate_nearest_station_details(stations_df, user_lat, user_lon):
         lambda row: haversine(user_lat, user_lon, row['lat'], row['lon']),
         axis=1
     )
-    
+
     closest_station_index = distances.idxmin()
     closest_station = stations_df.loc[closest_station_index]
     min_distance = distances.min()
-    
+
     # Check if a name tag exists, otherwise use coordinates
     station_name = closest_station['Station_Name'] if closest_station['Station_Name'] != 'OSM Station' else f"Station at ({closest_station['lat']:.2f}, {closest_station['lon']:.2f})"
-    
+
     return (f"The nearest charging station found (from OpenStreetMap) is **{station_name}**.\n"
             f"It is approximately **{min_distance:.2f} km** away.")
+
