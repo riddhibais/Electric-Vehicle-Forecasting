@@ -1,5 +1,5 @@
 # Electric-Vehicle-Forecasting
-# Electric Vehicle Forecasting Project
+
 This project is an interactive, multi-page web application designed to eliminate 'range anxiety' for EV users. It uses a Machine Learning model to precisely forecast the vehicle's remaining driving range based on real-time factors like speed, temperature, and terrain. Built using Python and Streamlit.
 
 
